@@ -48,7 +48,14 @@ def f_pow(args, local):
     return float(args[0]) ** float(args[1])
 
 def f_cat(args, local):
-    return reduce(lambda a,b: a+b, runall(args, local))
+    if len(args) != 2:
+        raise Exception("cat requires 2 args")
+    try:
+        args = runall(args, local)
+        return args[0:1] + args[1]
+    except TypeError:
+        print args
+        raise Exception("TypeError")
 
 def f_first(args, local):
     if len(args) != 1:
@@ -57,6 +64,14 @@ def f_first(args, local):
     if len(lst) < 1:
         raise Exception("list passed to first must not be empty")
     return lst[0]
+
+def f_rest(args, local):
+    if len(args) != 1:
+        raise Exception("rest requires 1 arg")
+    lst = run(args[0], local)
+    if len(lst) < 1:
+        raise Exception("list passed to rest must not be empty")
+    return lst[1:]
 
 def f_last(args, local):
     if len(args) != 1:
@@ -82,6 +97,41 @@ def f_defun(args, local):
     functions[fname] = [fargs, fstatement]
     return "defined function " + fname
 
+def f_defvar(args, local):
+    if len(args) != 2:
+        raise Exception("defvar requires 2 args")
+    vname = args[0]
+    if type(vname) != str:
+        raise Exception("variable name must be a string")
+    variables[vname] = run(args[1], local)
+    return "defined variable " + vname
+
+def f_set(args, local):
+    if len(args) != 2:
+        raise Exception("set requires 2 args")
+    vname = args[0]
+    if type(vname) != str:
+        raise Exception("variable name must be a string")
+    if not vname in variables:
+        raise Exception("cannot set nonexistant variable")
+    value = run(args[1], local)
+    variables[vname] = value
+    return value
+
+def f_let(args, local):
+    if len(args) != 2:
+        raise Exception("let requires 2 args")
+    local = local.copy()
+    for pair in args[0]:
+        if type(pair) != list or len(pair) != 2:
+            raise Exception("name value pairs must be 2 elements long")
+        vname = pair[0]
+        if type(vname) != str:
+            raise Exception("variable name must be a string")
+        value = run(pair[1], local)
+        local[vname] = value
+    return run(args[1], local)
+
 def f_list(args, local):
     return runall(args, local)
 
@@ -105,6 +155,39 @@ def f_equal(args, local):
     elif t1 == int: args[0] = int(args[0])
     return args[0] == args[1]
 
+def f_less(args, local):
+    if len(args) != 2:
+        raise Exception("< requires 2 args")
+    args = runall(args, local)
+    return args[0] < args[1]
+
+def f_greater(args, local):
+    if len(args) != 2:
+        raise Exception("> requires 2 args")
+    args = runall(args, local)
+    return args[0] > args[1]
+
+def f_or(args, local):
+    if len(args) < 1:
+        raise Exception("or requires 1+ args")
+    for a in args:
+        if run(a, local): return True
+    return False
+
+def f_not(args, local):
+    if len(args) != 1:
+        raise Exception("not requires 1 arg")
+    if run(args[0], local):
+        return True
+    return False
+
+def f_and(args, local):
+    if len(args) < 1:
+        raise Exception("and requires 1+ args")
+    for a in args:
+        if not run(a, local): return False
+    return True
+
 
 primitives = {
     '+' : f_sum, 
@@ -115,19 +198,20 @@ primitives = {
     'pow' : f_pow,
     'cat' : f_cat,
     'first' : f_first,
+    'rest' : f_rest,
     'last' : f_last,
     'defun' : f_defun,
-    #'defvar' : f_defvar,
-    #'set' : f_set,
-    #'let' : f_let,
+    'defvar' : f_defvar,
+    'set' : f_set,
+    'let' : f_let,
     'list' : f_list,
     'if' : f_if,
     'equal' : f_equal,
-    #'<' : f_less,
-    #'>' : f_greater,
-    #'or' : f_or,
-    #'not' : f_not,
-    #'and' : f_and
+    '<' : f_less,
+    '>' : f_greater,
+    'or' : f_or,
+    'not' : f_not,
+    'and' : f_and
     }
 functions = dict()
 variables = dict()
@@ -199,15 +283,17 @@ def run(tree, local):
         elif tree in functions:
             return functions[tree]
     elif type(tree) == list:
-        if len(tree) == 0: return None
+        if len(tree) == 0: return []
         fn = tree[0]
-        if fn in primitives:
+        if fn in local:
+            return runFunction(local[fn], tree[1:], local)
+        elif fn in primitives:
             return primitives[fn](tree[1:], local)
         elif fn in functions:
             #print fn + " called with " + str(tree[1:]) + " in context " + str(local)
             return runFunction(functions[fn], tree[1:], local)
         else:
-            return "Unknown function " + fn
+            raise Exception("unknown function " + fn)
     return tree
 
 def runFunction(fun, args, local):
