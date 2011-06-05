@@ -191,13 +191,19 @@ def f_less(args, local):
     if len(args) != 2:
         raise SyntaxError("< requires 2 args")
     args = runall(args, local)
-    return args[0] < args[1]
+    if type(args[0]) == float or type(args[1]) == float:
+        args = map(float, args)
+    elif type(args[0]) == int or type(args[1]) == int:
+        args = map(int, args)
+    if args[0] < args[1]: return 1
+    else: return 0
 
 def f_greater(args, local):
     if len(args) != 2:
         raise SyntaxError("> requires 2 args")
     args = runall(args, local)
-    return args[0] > args[1]
+    if args[0] > args[1]: return 1
+    else: return 0
 
 def f_or(args, local):
     if len(args) < 1:
@@ -227,6 +233,19 @@ def f_print(args, local):
     print show(a)
     return a
 
+def f_do(args, local):
+    if len(args) < 1:
+        raise SyntaxError("do requires 1+ args")
+    return runall(args, local)[-1]
+
+def f_while(args, local):
+    if len(args) != 2:
+        raise SyntaxError("while requires 2 args")
+    out = []
+    while run(args[0], local):
+        out = run(args[1], local)
+    return out
+
 
 primitives = {
     '+' : f_sum, 
@@ -252,7 +271,9 @@ primitives = {
     'or' : f_or,
     'not' : f_not,
     'and' : f_and,
-    'print' : f_print}
+    'print' : f_print,
+    'do' : f_do,
+    'while' : f_while}
 
 # 
 # Logic to run program trees:
@@ -294,7 +315,7 @@ def run(tree, local):
             return runMacro(macros[fn], tree[1:], local)
         else:
             raise Exception("unknown function " + fn)
-    raise Exception("unable to determine what " + tree + " is")
+    raise Exception("unable to determine what " + str(tree) + " is")
 
 def runFunction(fun, args, local):
     args = map(lambda x: run(x,local), args)
@@ -336,6 +357,8 @@ class Machine:
             self.current = []
 
     def endList(self):
+        if self.current is None:
+            raise SyntaxError("unexpected )")
         if self.stack:
             p = self.stack.pop()
             p.append(self.current)
