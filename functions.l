@@ -34,4 +34,4 @@
             (max (rest l)))
         (+ 0 0)))
 
-(def snd (x) (first (rest x)))
+(defun snd (x) (first (rest x)))
