@@ -11,11 +11,13 @@ This is a toy implementation of lisp, written in python, just for fun.
 
   to get the interactive interpreter (which stops working after the first
   error...)
+
 * run
 
     ./lisp.py filename
 
   to run the program in the file.
+
 * run
 
     cat file1 fil2 file 3 | ./lisp.py
@@ -33,8 +35,8 @@ This uses the standard lisp syntax, like this:
            (* 2 3)))
     (defun f (x) 
         (if (> x 0)
-            (f (- x 10)
-            (0))))
+            (f (- x 10))
+            (0)))
     (list 1 2 3)
     (defvar x (list 4 5 6))
 
