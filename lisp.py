@@ -13,6 +13,18 @@ def runall(args, local):
 def applyfloat(f, args, local):
     return reduce(f, map(float, runall(args, local)))
 
+def isString(s):
+    return (type(s) == str and len(s) > 1 
+            and s[0] == '"' and s[-1] == '"')
+
+def show(val):
+    if isString(val):
+        return val[1:-1]
+    elif type(val) == list:
+        return '(' + ' '.join(map(show, val)) + ')'
+    else:
+        return str(val)
+
 #
 # Primitive functions:
 #
@@ -208,6 +220,13 @@ def f_and(args, local):
         if not run(a, local): return False
     return True
 
+def f_print(args, local):
+    if len(args) != 1:
+        raise SyntaxError("print requires 1 arg")
+    a = run(args[0], local)
+    print show(a)
+    return a
+
 
 primitives = {
     '+' : f_sum, 
@@ -232,7 +251,8 @@ primitives = {
     '>' : f_greater,
     'or' : f_or,
     'not' : f_not,
-    'and' : f_and }
+    'and' : f_and,
+    'print' : f_print}
 
 # 
 # Logic to run program trees:
@@ -244,7 +264,9 @@ variables = dict()
 
 def run(tree, local):
     if type(tree) == str:
-        if tree in local:
+        if len(tree) > 1 and tree[0] == '"' and tree[-1] == '"':
+            return tree
+        elif tree in local:
             return local[tree]
         elif tree in variables:
             return variables[tree]
@@ -252,6 +274,8 @@ def run(tree, local):
             return functions[tree]
         elif tree in macros:
             return macros[tree]
+        else:
+            return tree
     elif type(tree) == list:
         if len(tree) == 0: return []
         fn = tree[0]
@@ -270,7 +294,7 @@ def run(tree, local):
             return runMacro(macros[fn], tree[1:], local)
         else:
             raise Exception("unknown function " + fn)
-    return tree
+    raise Exception("unable to determine what " + tree + " is")
 
 def runFunction(fun, args, local):
     args = map(lambda x: run(x,local), args)
@@ -317,7 +341,7 @@ class Machine:
             p.append(self.current)
             self.current = p
         else:
-            print run(self.current, dict())
+            run(self.current, dict())
             #print self.current
             self.current = None
 
