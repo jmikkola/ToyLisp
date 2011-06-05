@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import string
 import sys
+import readline
 
 #
 # Helper functions:
@@ -52,7 +53,10 @@ def f_cat(args, local):
         raise Exception("cat requires 2 args")
     try:
         args = runall(args, local)
-        return args[0:1] + args[1]
+        if type(args[0]) == str and args[0] and args[0][0] == '"':
+            return args[0][0:-1] + args[1][1:]
+        else:
+            return args[0] + args[1]
     except TypeError:
         print args
         raise Exception("TypeError")
@@ -63,7 +67,10 @@ def f_first(args, local):
     lst = run(args[0], local)
     if len(lst) < 1:
         raise Exception("list passed to first must not be empty")
-    return lst[0]
+    if type(lst) == list:
+        return lst[0]
+    elif type(lst) == str and lst[0] == '"':
+        return lst[1]
 
 def f_rest(args, local):
     if len(args) != 1:
@@ -211,68 +218,14 @@ primitives = {
     '>' : f_greater,
     'or' : f_or,
     'not' : f_not,
-    'and' : f_and
-    }
+    'and' : f_and }
+
+# 
+# Logic to run program trees:
+#
+
 functions = dict()
 variables = dict()
-
-def readWhitespace(text, i):
-    size = len(text)
-    while i < size and text[i].isspace():
-        i += 1
-    return i
-
-def readList(text, i):
-    size = len(text)
-    tree = []
-    if text[i] == '(':
-        i += 1
-        while text[i] != ')':
-            i = readWhitespace(text, i)
-            if text[i] == ')':
-                break
-            elif text[i] == '(':
-                i, t = readList(text, i)
-                tree.append(t)
-            elif text[i] == '"':
-                i, s = readString(text, i)
-                tree.append(s)
-            else:
-                s = ''
-                while i < size and  not (
-                        text[i].isspace() or text[i] == ')'):
-                    s += text[i]
-                    i += 1
-                tree.append(s)
-        i += 1
-    else:
-        raise Exception("Bad starting character: " + text[i])
-    return i, tree
-
-def readString(text, i):
-    size = len(text)
-    last = '-'
-    s = ''
-    i += 1
-    while i < size:
-        if text[i] == '"' and last != '\\':
-            break
-        last = text[i]
-        if text[i] != '\\':
-            s += text[i]
-        i += 1
-    i += 1
-    return i, s
-
-def parse(text):
-    size = len(text)
-    trees = []
-    i = readWhitespace(text, 0)
-    while i < size:
-        i, tree = readList(text, i)
-        trees.append(tree)
-        i = readWhitespace(text, i)
-    return trees
 
 def run(tree, local):
     if type(tree) == str:
@@ -290,7 +243,6 @@ def run(tree, local):
         elif fn in primitives:
             return primitives[fn](tree[1:], local)
         elif fn in functions:
-            #print fn + " called with " + str(tree[1:]) + " in context " + str(local)
             return runFunction(functions[fn], tree[1:], local)
         else:
             raise Exception("unknown function " + fn)
@@ -304,15 +256,123 @@ def runFunction(fun, args, local):
         local[fun[0][i]] = args[i]
     return run(fun[1], local)
 
+#
+# Logic to read in programs:
+#
 
-if len(sys.argv) > 1:
-    fname = sys.argv[1]
-    if fname == '-':
-        text = sys.stdin.read()
-    else:
-        fin = open(fname, 'r')
-        text = fin.read()
+
+class Machine:
+
+    def __init__(self):
+        self.stack = []
+        self.current = None
+        self.lastCh = None
+        self.state = 0
+
+    def startList(self):
+        if self.state == 1:
+            self.endName()
+        if self.current is None:
+            self.current = []
+        else:
+            self.stack.append(self.current)
+            self.current = []
+
+    def endList(self):
+        if self.stack:
+            p = self.stack.pop()
+            p.append(self.current)
+            self.current = p
+        else:
+            print run(self.current, dict())
+            #print self.current
+            self.current = None
+
+    def startName(self, c):
+        self.stack.append(self.current)
+        self.current = c
+        self.state = 1
+
+    def endName(self):
+        self.state = 0
+        p = self.stack.pop()
+        p.append(self.current)
+        self.current = p
+
+    def startString(self):
+        self.stack.append(self.current)
+        self.current = '"'
+        self.state = 2
+
+    def endString(self):
+        p  = self.stack.pop()
+        p.append(self.current + '"')
+        self.current = p
+        self.state = 0
+        self.lastCh = None
+
+    def addLine(self, line):
+        line = self.readLine(str.rstrip(line))
+        for c in line:
+            if self.state == 0:
+                if c == '(':
+                    self.startList()
+                elif c == ')':
+                    self.endList()
+                elif c == '"':
+                    if self.current is None:
+                        raise SyntaxError("Start of string outside of list")
+                    self.startString()
+                elif not c.isspace():
+                    if self.current is None:
+                        raise SyntaxError("Start of name outside of list")
+                    self.startName(c)
+            elif self.state == 1:
+                if c == ')':
+                    self.endName()
+                    self.endList()
+                elif c.isspace():
+                    self.endName()
+                else:
+                    self.current += c
+            elif self.state == 2:
+                if c == '"' and self.lastCh != '//':
+                    self.endString()
+                else:
+                    self.current += c
+                    self.lastCh = c
+        if self.state == 1:
+            self.endName()
+
+
+    def readLine(self, line):
+        for c in line:
+            yield c
+
+def main():
+    m = Machine()
+    if len(sys.argv) > 1:
+        # Read from file
+        fin = open(sys.argv[1], 'r')
+        for line in fin:
+            try:
+                m.addLine(line)
+            except SyntaxError as e:
+                print 'Syntax error: ' + str(e)
         fin.close()
-    trees = parse(text)
-    for tree in trees:
-        print run(tree, dict())
+    else:
+        # interactive session
+        while 1:
+            try:
+                line = raw_input('> ') + '\n'
+            except:
+                print ''
+                break
+            try:
+                m.addLine(line)
+            except SyntaxError as e:
+                print 'Syntax error: ' + str(e)
+
+if __name__ == '__main__':
+    main()
+
