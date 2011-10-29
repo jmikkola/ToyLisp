@@ -2,9 +2,9 @@
    (if a 
         (if b
             (cat
-                (list 
+                (list (list
                     (first a)
-                    (first b))
+                    (first b)))
                 (zip 
                     (rest a)
                     (rest b)))

@@ -73,6 +73,12 @@ def f_cat(args, local):
         print args
         raise SyntaxError("TypeError")
 
+def f_push(args, local):
+    if len(args) != 2:
+        raise SyntaxError("push requires 2 args")
+    args = runall(args, local)
+    return [args[0]] + args[1]
+
 def f_first(args, local):
     if len(args) != 1:
         raise SyntaxError("first requires 1 arg")
@@ -255,6 +261,7 @@ primitives = {
     'mod' : f_mod,
     'pow' : f_pow,
     'cat' : f_cat,
+    'push' : f_push,
     'first' : f_first,
     'rest' : f_rest,
     'last' : f_last,
@@ -364,7 +371,7 @@ class Machine:
             p.append(self.current)
             self.current = p
         else:
-            run(self.current, dict())
+            print show(run(self.current, dict()))
             #print self.current
             self.current = None
 
